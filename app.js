@@ -5,6 +5,7 @@ const ejs = require('ejs')
 const mongoose = require('mongoose')
 const encrypt = require('mongoose-encryption')
 const { Schema, model } = mongoose;
+const md5 = require('md5')
 
 const app = express()
 mongoose.connect("mongodb://localhost:27017/userDB", {
@@ -20,7 +21,7 @@ const userSchema = new Schema({
     password: String,
 })
 
-userSchema.plugin(encrypt, { secret: process.env.SECRET, encryptedFields:['password'] });
+userSchema.plugin(encrypt, { secret: process.env.SECRET, encryptedFields: ['password'] });
 
 const User = new model("User", userSchema);
 
@@ -34,15 +35,20 @@ app.route('/login')
         res.render('login')
     })
     .post((req, res) => {
-        User.findOne({ email: req.body.username }).then(user => {
-            if (user) {
-                console.log(user);
-                if (user.password === req.body.password) {
-                    console.log(user);
-                    res.render('secrets')
+        User.findOne({ email: req.body.username })
+            .then(user => {
+                if (user) {
+                    if (user.password === md5(req.body.password)) {
+                        console.log(user);
+                        res.render('secrets')
+                    } else {
+                        console.log(md5(req.body.password))
+                    }
                 }
-            }
-        })
+            })
+            .catch(e => {
+                console.log(e)
+            })
     });
 
 app.route('/register')
@@ -52,15 +58,17 @@ app.route('/register')
     .post((req, res) => {
         let user = new User({
             email: req.body.username,
-            password: req.body.password
+            password: md5(req.body.password)
         })
+        console.log(req.body.username)
+        console.log(md5(req.body.password))
         user.save().then(r => console.log(r))
         res.render('secrets')
     });
 
 app.route('/logout')
     .get((req, res) => {
-        res.render('home')
+        res.redirect('/')
     });
 
 app.listen(3000, () => {
