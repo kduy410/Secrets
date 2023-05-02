@@ -6,9 +6,11 @@ const mongoose = require('mongoose')
 const encrypt = require('mongoose-encryption')
 const { Schema, model } = mongoose;
 const md5 = require('md5')
+const bcrypt = require('bcrypt')
+const saltRounds = 10;
 
 const app = express()
-mongoose.connect("mongodb://localhost:27017/userDB", {
+mongoose.connect("mongodb://127.0.0.1:27017/userDB", {
     useNewUrlParser: true,
     useUnifiedTopology: true,
 })
@@ -38,32 +40,39 @@ app.route('/login')
         User.findOne({ email: req.body.username })
             .then(user => {
                 if (user) {
-                    if (user.password === md5(req.body.password)) {
-                        console.log(user);
-                        res.render('secrets')
-                    } else {
-                        console.log(md5(req.body.password))
-                    }
+                    bcrypt.compare(req.body.password, user.password)
+                        .then(result => {
+                            if (result) {
+                                res.render('secrets')
+                            } else {
+                                console.log("Wrong password: " + req.body.password)
+                            }
+
+                        })
+                        .catch(e => {
+                            console.log(e)
+                        })
                 }
             })
-            .catch(e => {
-                console.log(e)
-            })
-    });
+    })
 
 app.route('/register')
     .get((req, res) => {
         res.render('register')
     })
     .post((req, res) => {
-        let user = new User({
-            email: req.body.username,
-            password: md5(req.body.password)
+        bcrypt.hash(req.body.password, saltRounds).then(hash => {
+            console.log(hash)
+            let user = new User({
+                email: req.body.username,
+                password: hash,
+            })
+            user.save().then(r => {
+                console.log("SAVED")
+                console.log(r)
+                res.render('secrets')
+            })
         })
-        console.log(req.body.username)
-        console.log(md5(req.body.password))
-        user.save().then(r => console.log(r))
-        res.render('secrets')
     });
 
 app.route('/logout')
