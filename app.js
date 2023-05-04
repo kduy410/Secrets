@@ -31,7 +31,8 @@ app.use(passport.session())
 const userSchema = new Schema({
     email: String,
     password: String,
-    googleId: Number
+    googleId: String,
+    secret: String,
 })
 
 userSchema.plugin(passportLocalMongoose);
@@ -125,11 +126,11 @@ app.route('/logout')
 
 app.route('/secrets')
     .get((req, res) => {
-        if (req.isAuthenticated()) {
-            res.render('secrets')
-        } else {
-            res.redirect('/login')
-        }
+        User.find({"secret": {$ne: null}}).then(users => {
+            if (users) {
+                res.render("secrets", {usersWithSecret: users})
+            }
+        }).catch(e => {console.log(e)})
     });
 
 app.route('/auth/google')
@@ -143,6 +144,25 @@ app.get("/auth/google/secrets",
     function (req, res) {
         res.redirect("/secrets");
     })
+
+app.route('/submit')
+    .get((req, res) => {
+        if (req.isAuthenticated()) {
+            res.render('submit')
+        } else {
+            res.redirect('/login')
+        }
+    })
+    .post((req, res) => {
+        User.findById(req.user.id).then(user => {
+            user.secret = req.body.secret
+            user.save().then(r => {
+                res.redirect("/secrets")
+            })
+        }).catch(e => {
+            console.log(e)
+        })
+    });
 
 app.listen(3000, () => {
     console.log("Server started on port 3000")
