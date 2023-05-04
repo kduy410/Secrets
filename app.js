@@ -8,6 +8,8 @@ const { Schema, model } = mongoose;
 const session = require('express-session')
 const passport = require('passport')
 const passportLocalMongoose = require('passport-local-mongoose')
+const GoogleStrategy = require('passport-google-oauth20').Strategy;
+const findOrCreate = require('mongoose-findorcreate');
 
 const app = express()
 mongoose.connect("mongodb://127.0.0.1:27017/userDB", {
@@ -29,17 +31,42 @@ app.use(passport.session())
 const userSchema = new Schema({
     email: String,
     password: String,
+    googleId: Number
 })
 
 userSchema.plugin(passportLocalMongoose);
+userSchema.plugin(findOrCreate);
 
 const User = new model("User", userSchema);
 
 passport.use(User.createStrategy())
-passport.serializeUser(User.serializeUser())
-passport.deserializeUser(User.deserializeUser())
 
+passport.serializeUser((user, done) => {
+    done(null, user.id)
+})
 
+passport.deserializeUser((id, done) => {
+    User.findById(id).exec()
+        .then(user => {
+            done(null, user)
+        })
+        .catch(e => {
+            console.log(e)
+        })
+})
+
+passport.use(new GoogleStrategy({
+    clientID: process.env.CLIENT_ID,
+    clientSecret: process.env.CLIENT_SECRET,
+    callbackURL: "http://localhost:3000/auth/google/secrets", // without www
+    userProfileURL: "https://www.googleapis.com/oauth2/v3/userinfo"
+},
+    function (accessToken, refreshToken, profile, cb) {
+        User.findOrCreate({ googleId: profile.id }, function (err, user) {
+            return cb(err, user);
+        });
+    }
+));
 
 app.route('/')
     .get((req, res) => {
@@ -104,6 +131,18 @@ app.route('/secrets')
             res.redirect('/login')
         }
     });
+
+app.route('/auth/google')
+    .get((req, res) => {
+        passport.authenticate('google', { scope: ["profile"] })
+            (req, res, () => { })
+    });
+
+app.get("/auth/google/secrets",
+    passport.authenticate("google", { failureRedirect: "/login" }),
+    function (req, res) {
+        res.redirect("/secrets");
+    })
 
 app.listen(3000, () => {
     console.log("Server started on port 3000")
